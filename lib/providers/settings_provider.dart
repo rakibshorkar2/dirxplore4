@@ -52,6 +52,13 @@ class SettingsProvider with ChangeNotifier {
   }
 
   void removeServer(int index) async {
+    // Ensure we don't remove the default server if it's the last one,
+    // and specifically protect the mandatory default server.
+    final serverToRemove = _httpServers[index];
+    if (serverToRemove == 'http://172.16.50.4/') {
+      return; // Do not allow removing the default server
+    }
+
     if (_httpServers.length > 1) {
       _httpServers.removeAt(index);
       if (_selectedServerIndex >= index && _selectedServerIndex > 0) {
