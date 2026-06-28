@@ -28,12 +28,19 @@ jobs:
 
       - name: Build iOS (Unsigned)
         run: |
-          # Inject dummy team and disable signing in project file
-          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = "0000000000";/g' ios/Runner.xcodeproj/project.pbxproj
-          # Use environment variables to pass build settings to xcodebuild
+          # Inject a dummy Development Team ID into the project file
+          # We search for PRODUCT_BUNDLE_IDENTIFIER and append DEVELOPMENT_TEAM after it
+          # This ensures the key exists even if the template omitted it.
+          sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER/a\'$'\n''\				DEVELOPMENT_TEAM = "0000000000";' ios/Runner.xcodeproj/project.pbxproj
+          
+          # Force disable code signing for all targets via environment variables
           export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
           export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
           export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
+          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY=""
+          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY_NAME=""
+          export FLUTTER_XCODE_EXPANDED_PROVISIONING_PROFILE=""
+
           flutter build ios --release --no-codesign
 
       - name: Package IPA
