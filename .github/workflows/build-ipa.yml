@@ -23,37 +23,19 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Flutter Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ios/Pods
-          key: ${{ runner.os }}-flutter-pods-${{ hashFiles('**/pubspec.lock', '**/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-pods-
-
-      - name: Flutter Clean & Pub Get
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          # Ensure Cocoapods is ready and up to date
-          pod install || (rm -rf Pods Podfile.lock && pod install)
-          cd ..
+      - name: Flutter Pub Get
+        run: flutter pub get
 
       - name: Patch Xcode Project for Unsigned Build
         run: |
           # Use our production-grade python patcher
+          # This script will run before flutter build
           python3 scripts/clean_ios.py
 
       - name: Build iOS .app (Unsigned)
         run: |
-          # We build for device (iphoneos) but without codesign
-          # We use --verbose to help debug if it fails
+          # flutter build ios handles pod install automatically if needed.
+          # We use --no-codesign to tell flutter not to try signing the final bundle.
           flutter build ios --release --no-codesign --verbose
 
       - name: Package Unsigned .ipa
