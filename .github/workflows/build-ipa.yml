@@ -35,6 +35,18 @@ jobs:
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_STYLE=Manual" >> ios/Flutter/Release.xcconfig
+          
+          # Patch Podfile to disable signing on all pod targets
+          if [ -f ios/Podfile ]; then
+            echo "post_install do |installer|
+              installer.pods_project.targets.each do |target|
+                target.build_configurations.each do |config|
+                  config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+                  config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+                end
+              end
+            end" >> ios/Podfile
+          fi
 
       - name: Build iOS (Unsigned)
         run: |
