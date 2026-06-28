@@ -1,4 +1,4 @@
-name: Build and Release Unsigned IPA
+name: Production Unsigned iOS Build
 
 on:
   push:
@@ -23,61 +23,77 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Flutter Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ios/Pods
+          key: ${{ runner.os }}-flutter-pods-${{ hashFiles('**/pubspec.lock', '**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-pods-
 
-      - name: Clean and Configure Xcode for Unsigned Build
+      - name: Flutter Clean & Pub Get
         run: |
-          # 1. Clean pbxproj
-          python3 clean_pbxproj.py
-          
-          # 2. Setup xcconfig
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_STYLE=Manual" >> ios/Flutter/Release.xcconfig
-          echo "DEVELOPMENT_TEAM=" >> ios/Flutter/Release.xcconfig
-          
-          # 3. Ensure Generated.xcconfig also has no signing
-          # (Flutter build ios will overwrite this, but we'll try to set env vars)
+          flutter clean
+          flutter pub get
 
-      - name: Build iOS (Unsigned)
+      - name: Install CocoaPods
         run: |
-          # Use FLUTTER_XCODE environment variables to force-disable signing
-          export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
-          export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
-          export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
-          export FLUTTER_XCODE_CODE_SIGN_STYLE=Manual
-          export FLUTTER_XCODE_DEVELOPMENT_TEAM=""
-          export FLUTTER_XCODE_PROVISIONING_PROFILE=""
-          export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
-          
-          # Force COMPILER_INDEX_STORE_ENABLE=NO to avoid some Xcode 15 build artifacts
-          export FLUTTER_XCODE_COMPILER_INDEX_STORE_ENABLE=NO
-          
-          # Build the .app bundle
+          cd ios
+          # Ensure Cocoapods is ready and up to date
+          pod install || (rm -rf Pods Podfile.lock && pod install)
+          cd ..
+
+      - name: Patch Xcode Project for Unsigned Build
+        run: |
+          # Use our production-grade python patcher
+          python3 scripts/clean_ios.py
+
+      - name: Build iOS .app (Unsigned)
+        run: |
+          # We build for device (iphoneos) but without codesign
+          # We use --verbose to help debug if it fails
           flutter build ios --release --no-codesign --verbose
 
-      - name: Package Unsigned IPA
+      - name: Package Unsigned .ipa
         run: |
+          # Standard iOS IPA structure
           mkdir -p Payload
+          
           APP_PATH="build/ios/iphoneos/Runner.app"
           if [ -d "$APP_PATH" ]; then
-            echo "Found .app bundle."
+            echo "Found .app bundle at $APP_PATH"
           else
-            echo "Error: .app bundle not found at $APP_PATH"
+            echo "ERROR: .app bundle not found!"
             exit 1
           fi
           
-          # Copy to Payload
+          # Copy .app into Payload
           cp -R "$APP_PATH" Payload/
           
-          # COMPLETELY STRIP ANY SIGNATURE
+          # Remove any partial signature data to ensure it is "totally unsigned"
+          # This is critical for AltStore and Sideloadly to work correctly
           rm -rf Payload/Runner.app/_CodeSignature
           
           # Zip into .ipa
           zip -r dir_browser_unsigned.ipa Payload
           
-      - name: Get Version
+      - name: Upload .app as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-app
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 7
+
+      - name: Upload .ipa as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: dir_browser_unsigned.ipa
+          retention-days: 7
+
+      - name: Get Version for Release
         id: vars
         run: |
           VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')
@@ -85,16 +101,18 @@ jobs:
           echo "tag=v${VERSION}-${SHA_SHORT}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           files: dir_browser_unsigned.ipa
           tag_name: ${{ steps.vars.outputs.tag }}
-          name: Release ${{ steps.vars.outputs.version }} (${{ github.run_number }})
+          name: Release ${{ steps.vars.outputs.version }} (Build ${{ github.run_number }})
           body: |
-            Automated build for version ${{ steps.vars.outputs.version }}
-            This is an UNSIGNED IPA for sideloading.
-            Commit: ${{ github.sha }}
+            ### Unsigned iOS Build
+            - Version: `${{ steps.vars.outputs.version }}`
+            - Developer: **RAKIB**
+            - Sideloading: Compatible with **AltStore**, **Sideloadly**, and **TrollStore**.
+            - Commit: `${{ github.sha }}`
           draft: false
           prerelease: false
         env:
