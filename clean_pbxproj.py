@@ -1,27 +1,47 @@
-import re
 import sys
+import re
 
-def clean_pbxproj(path):
-    with open(path, 'r') as f:
-        lines = f.readlines()
+def main():
+    path = 'ios/Runner.xcodeproj/project.pbxproj'
+    try:
+        with open(path, 'r') as f:
+            content = f.read()
 
-    with open(path, 'w') as f:
-        for line in lines:
-            # Remove all DEVELOPMENT_TEAM lines
-            if 'DEVELOPMENT_TEAM' in line:
-                continue
-            # Remove all PROVISIONING_PROFILE lines
-            if 'PROVISIONING_PROFILE' in line:
-                continue
-            # Force Code Sign Style to Manual
-            if 'CODE_SIGN_STYLE' in line:
-                line = re.sub(r'CODE_SIGN_STYLE = (Automatic|""|null);', 'CODE_SIGN_STYLE = Manual;', line)
+        # 1. Remove DevelopmentTeam from TargetAttributes
+        content = re.sub(r'DevelopmentTeam = [A-Z0-9]+;', 'DevelopmentTeam = "";', content)
 
-            # Force identity to empty
-            if 'CODE_SIGN_IDENTITY' in line:
-                line = re.sub(r'CODE_SIGN_IDENTITY = ".*";', 'CODE_SIGN_IDENTITY = "";', line)
+        # 2. Set DEVELOPMENT_TEAM to empty string in all build settings
+        content = re.sub(r'DEVELOPMENT_TEAM = [A-Z0-9"]+;', 'DEVELOPMENT_TEAM = "";', content)
 
-            f.write(line)
+        # 3. Force CODE_SIGNING_ALLOWED to NO
+        if 'CODE_SIGNING_ALLOWED' in content:
+            content = re.sub(r'CODE_SIGNING_ALLOWED = YES;', 'CODE_SIGNING_ALLOWED = NO;', content)
+        else:
+            # Inject it into buildSettings if missing
+            content = content.replace('buildSettings = {', 'buildSettings = {\n\t\t\t\tCODE_SIGNING_ALLOWED = NO;')
 
-if __name__ == "__main__":
-    clean_pbxproj('ios/Runner.xcodeproj/project.pbxproj')
+        # 4. Force CODE_SIGNING_REQUIRED to NO
+        if 'CODE_SIGNING_REQUIRED' in content:
+            content = re.sub(r'CODE_SIGNING_REQUIRED = YES;', 'CODE_SIGNING_REQUIRED = NO;', content)
+        else:
+            content = content.replace('buildSettings = {', 'buildSettings = {\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;')
+
+        # 5. Ensure CODE_SIGN_IDENTITY is empty
+        content = re.sub(r'CODE_SIGN_IDENTITY = ".*?";', 'CODE_SIGN_IDENTITY = "";', content)
+        content = re.sub(r'CODE_SIGN_IDENTITY = .*?;', 'CODE_SIGN_IDENTITY = "";', content)
+
+        # 6. Force Manual signing style
+        content = re.sub(r'CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;', content)
+
+        # 7. Remove any provisioning profiles
+        content = re.sub(r'PROVISIONING_PROFILE_SPECIFIER = ".*?";', 'PROVISIONING_PROFILE_SPECIFIER = "";', content)
+        content = re.sub(r'PROVISIONING_PROFILE = ".*?";', 'PROVISIONING_PROFILE = "";', content)
+
+        with open(path, 'w') as f:
+            f.write(content)
+        print("Successfully cleaned project.pbxproj")
+    except Exception as e:
+        print(f"Error cleaning pbxproj: {e}")
+
+if __name__ == '__main__':
+    main()

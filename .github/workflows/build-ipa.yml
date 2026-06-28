@@ -26,31 +26,23 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Clean Xcode Project
+      - name: Clean and Configure Xcode for Unsigned Build
         run: |
-          # Use the python script to strip signing from pbxproj
+          # 1. Clean pbxproj
           python3 clean_pbxproj.py
           
-          # Ensure xcconfig is clean
+          # 2. Setup xcconfig
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_STYLE=Manual" >> ios/Flutter/Release.xcconfig
+          echo "DEVELOPMENT_TEAM=" >> ios/Flutter/Release.xcconfig
           
-          # Patch Podfile to disable signing on all pod targets
-          if [ -f ios/Podfile ]; then
-            echo "post_install do |installer|
-              installer.pods_project.targets.each do |target|
-                target.build_configurations.each do |config|
-                  config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-                  config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-                end
-              end
-            end" >> ios/Podfile
-          fi
+          # 3. Ensure Generated.xcconfig also has no signing
+          # (Flutter build ios will overwrite this, but we'll try to set env vars)
 
       - name: Build iOS (Unsigned)
         run: |
-          # Export variables for the build process
+          # Use FLUTTER_XCODE environment variables to force-disable signing
           export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
           export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
           export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
@@ -59,7 +51,10 @@ jobs:
           export FLUTTER_XCODE_PROVISIONING_PROFILE=""
           export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
           
-          # Perform the build
+          # Force COMPILER_INDEX_STORE_ENABLE=NO to avoid some Xcode 15 build artifacts
+          export FLUTTER_XCODE_COMPILER_INDEX_STORE_ENABLE=NO
+          
+          # Build the .app bundle
           flutter build ios --release --no-codesign --verbose
 
       - name: Package Unsigned IPA
@@ -67,14 +62,19 @@ jobs:
           mkdir -p Payload
           APP_PATH="build/ios/iphoneos/Runner.app"
           if [ -d "$APP_PATH" ]; then
-            echo "Found .app at $APP_PATH"
+            echo "Found .app bundle."
           else
             echo "Error: .app bundle not found at $APP_PATH"
             exit 1
           fi
+          
+          # Copy to Payload
           cp -R "$APP_PATH" Payload/
-          # Remove any potential signature artifacts
+          
+          # COMPLETELY STRIP ANY SIGNATURE
           rm -rf Payload/Runner.app/_CodeSignature
+          
+          # Zip into .ipa
           zip -r dir_browser_unsigned.ipa Payload
           
       - name: Get Version
@@ -93,8 +93,8 @@ jobs:
           name: Release ${{ steps.vars.outputs.version }} (${{ github.run_number }})
           body: |
             Automated build for version ${{ steps.vars.outputs.version }}
+            This is an UNSIGNED IPA for sideloading.
             Commit: ${{ github.sha }}
-            Run Number: ${{ github.run_number }}
           draft: false
           prerelease: false
         env:
