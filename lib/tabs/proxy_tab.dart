@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../providers/app_proxy_provider.dart';
 import '../models/proxy_config.dart';
 
@@ -17,6 +19,7 @@ class _ProxyTabState extends State<ProxyTab> {
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   final TextEditingController _yamlController = TextEditingController();
+  bool _isTesting = false;
 
   @override
   void initState() {
@@ -42,17 +45,44 @@ class _ProxyTabState extends State<ProxyTab> {
     super.dispose();
   }
 
+  Future<void> _pickYamlFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['yaml', 'yml', 'txt'],
+    );
+
+    if (result != null) {
+      File file = File(result.files.single.path!);
+      String content = await file.readAsString();
+      _yamlController.text = content;
+    }
+  }
+
   void _showYamlDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Import YAML Config'),
-        content: TextField(
-          controller: _yamlController,
-          maxLines: 10,
-          decoration: const InputDecoration(
-            hintText: 'Paste Clash-style YAML here...',
-            border: OutlineInputBorder(),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _pickYamlFile,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Pick File from Device'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _yamlController,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  hintText: 'Or paste Clash-style YAML here...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -78,6 +108,29 @@ class _ProxyTabState extends State<ProxyTab> {
               }
             },
             child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _testProxy() async {
+    setState(() => _isTesting = true);
+    final success = await context.read<AppProxyProvider>().testConnection();
+    setState(() => _isTesting = false);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(success ? 'Success' : 'Failed'),
+        content: Text(success 
+          ? 'Proxy connection is working correctly.' 
+          : 'Could not connect through proxy. Please check your settings, credentials, or server status.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -134,7 +187,19 @@ class _ProxyTabState extends State<ProxyTab> {
                 key: _formKey,
                 child: ListView(
                   children: [
-                    Text('Editing: ${config.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Editing: ${config.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        _isTesting 
+                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                          : TextButton.icon(
+                              onPressed: _testProxy, 
+                              icon: const Icon(Icons.network_check), 
+                              label: const Text('Test Proxy')
+                            ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _serverController,

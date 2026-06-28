@@ -62,9 +62,24 @@ class AppProxyProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> testConnection() async {
+    try {
+      final dio = getDio();
+      // Test against a small public resource or a connectivity check
+      final response = await dio.get('http://www.google.com/generate_204').timeout(const Duration(seconds: 5));
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Proxy test failed: $e');
+      return false;
+    }
+  }
+
   Dio getDio() {
     final dio = Dio();
     final config = currentConfig;
+    
+    dio.options.connectTimeout = const Duration(seconds: 10);
+    dio.options.receiveTimeout = const Duration(seconds: 10);
     
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
@@ -73,8 +88,8 @@ class AppProxyProvider with ChangeNotifier {
         final proxySettings = ProxySettings(
           InternetAddress(config.server),
           config.port,
-          username: config.username,
-          password: config.password,
+          username: config.username.isEmpty ? null : config.username,
+          password: config.password.isEmpty ? null : config.password,
         );
 
         SocksTCPClient.assignToHttpClient(client, [proxySettings]);
