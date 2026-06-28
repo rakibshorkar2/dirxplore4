@@ -60,6 +60,11 @@ class AppProxyProvider with ChangeNotifier {
     }
   }
 
+  void clearLogs() {
+    _logs.clear();
+    notifyListeners();
+  }
+
   void importFromYaml(String yamlString) {
     try {
       final doc = loadYaml(yamlString);

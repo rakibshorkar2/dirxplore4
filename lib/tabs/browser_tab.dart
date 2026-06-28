@@ -59,7 +59,7 @@ class _BrowserTabState extends State<BrowserTab> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = '$e\n\nCheck Settings -> Connection Logs for details.';
         _isLoading = false;
       });
     }

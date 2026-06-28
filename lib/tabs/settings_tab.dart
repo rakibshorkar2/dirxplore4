@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_proxy_provider.dart';
 import '../providers/settings_provider.dart';
@@ -108,10 +109,27 @@ class _SettingsTabState extends State<SettingsTab> {
               builder: (context, scrollController) {
                 return Column(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text('Proxy Connection Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Proxy Connection Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => context.read<AppProxyProvider>().clearLogs(),
+                        tooltip: 'Clear Logs',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share),
+                        onPressed: () {
+                          final text = logs.join('\n');
+                          Share.share(text, subject: 'App Proxy Logs');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                     Expanded(
                       child: ListView.builder(
                         controller: scrollController,
