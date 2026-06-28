@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_proxy_provider.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -12,12 +14,20 @@ class SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<SettingsTab> {
   String _cacheSize = 'Calculating...';
-  final String _version = '1.0.1';
+  String _version = '1.0.1';
   final String _developer = 'RAKIB';
 
   @override
   void initState() {
     super.initState();
+    _initInfo();
+  }
+
+  Future<void> _initInfo() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = info.version;
+    });
     _calculateCacheSize();
   }
 
@@ -77,6 +87,44 @@ class _SettingsTabState extends State<SettingsTab> {
     }
   }
 
+  void _showLogs() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        final logs = context.watch<AppProxyProvider>().logs;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('Proxy Connection Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: logs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                        child: Text(logs[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,6 +148,17 @@ class _SettingsTabState extends State<SettingsTab> {
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(16.0),
+            child: Text('Diagnostics', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('View Connection Logs'),
+            subtitle: const Text('Detailed proxy transaction history'),
+            onTap: _showLogs,
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.all(16.0),
             child: Text('Storage & Cache', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
           ),
           ListTile(
@@ -113,18 +172,6 @@ class _SettingsTabState extends State<SettingsTab> {
             leading: const Icon(Icons.delete_sweep, color: Colors.red),
             title: const Text('Clear All Downloads', style: TextStyle(color: Colors.red)),
             onTap: _clearDownloads,
-          ),
-          const Divider(),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('Advanced', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.bug_report_outlined),
-            title: const Text('Debug Logging'),
-            subtitle: const Text('Enable detailed logs for troubleshooting'),
-            value: false,
-            onChanged: (v) {},
           ),
         ],
       ),
