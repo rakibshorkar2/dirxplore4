@@ -1,101 +1,121 @@
-name: Production Unsigned iOS Build
+name: Build & Release Unsigned IPA
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build:
+  build-ipa:
     runs-on: macos-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout code
+      # ── 1. Source ───────────────────────────────────────────────────────────
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Flutter
+      # ── 2. Flutter ──────────────────────────────────────────────────────────
+      - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
-      - name: Flutter Pub Get
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Patch Xcode Project for Unsigned Build
+      # ── 3. Version tag ──────────────────────────────────────────────────────
+      - name: Compute version tag
+        id: ver
         run: |
-          # Use our production-grade python patcher
-          # This script will run before flutter build
+          RAW=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          BASE="${RAW%%+*}"
+          TAG="v${BASE}+${{ github.run_number }}"
+          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
+          echo "name=DirXplore Lite $TAG" >> "$GITHUB_OUTPUT"
+          echo "Version tag: $TAG"
+
+      # ── 4. Build unsigned IPA ────────────────────────────────────────────────
+      - name: Clean & Patch Project for Unsigned Build
+        run: |
+          # 1. Use the production-grade python patcher to strip signing and inject overrides
           python3 scripts/clean_ios.py
-
-      - name: Build iOS .app (Unsigned)
-        run: |
-          # flutter build ios handles pod install automatically if needed.
-          # We use --no-codesign to tell flutter not to try signing the final bundle.
-          flutter build ios --release --no-codesign --verbose
-
-      - name: Package Unsigned .ipa
-        run: |
-          # Standard iOS IPA structure
-          mkdir -p Payload
           
+          # 2. Add extra bypass flags from learned workflow to Release configuration
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY[sdk=iphoneos*]=" >> ios/Flutter/Release.xcconfig
+          # We use a dummy team to satisfy Xcode 15's validation before it hits --no-codesign
+          echo "DEVELOPMENT_TEAM=ABC123XYZ8" >> ios/Flutter/Release.xcconfig
+
+      - name: Build iOS (no-codesign)
+        run: flutter build ios --release --no-codesign --verbose
+
+      - name: Package IPA
+        id: pkg
+        run: |
           APP_PATH="build/ios/iphoneos/Runner.app"
-          if [ -d "$APP_PATH" ]; then
-            echo "Found .app bundle at $APP_PATH"
-          else
-            echo "ERROR: .app bundle not found!"
-            exit 1
-          fi
-          
-          # Copy .app into Payload
-          cp -R "$APP_PATH" Payload/
-          
-          # Remove any partial signature data to ensure it is "totally unsigned"
-          # This is critical for AltStore and Sideloadly to work correctly
-          rm -rf Payload/Runner.app/_CodeSignature
-          
-          # Zip into .ipa
-          zip -r dir_browser_unsigned.ipa Payload
-          
-      - name: Upload .app as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: runner-app
-          path: build/ios/iphoneos/Runner.app
-          retention-days: 7
+          PAYLOAD_DIR="build/ios/iphoneos/Payload"
+          IPA_NAME="DirXploreLite-${{ steps.ver.outputs.tag }}.ipa"
+          IPA_PATH="build/ios/iphoneos/$IPA_NAME"
 
-      - name: Upload .ipa as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-ipa
-          path: dir_browser_unsigned.ipa
-          retention-days: 7
+          mkdir -p "$PAYLOAD_DIR"
+          cp -r "$APP_PATH" "$PAYLOAD_DIR/"
 
-      - name: Get Version for Release
-        id: vars
+          # CRITICAL: Strip code signature residues for a "totally unsigned" state
+          rm -rf "$PAYLOAD_DIR/Runner.app/_CodeSignature"
+
+          cd build/ios/iphoneos
+          zip -r "$IPA_NAME" Payload
+          cd ../../..
+
+          echo "ipa_path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Tag the commit ────────────────────────────────────────────────────
+      - name: Create & push git tag
         run: |
-          VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')
-          SHA_SHORT=$(git rev-parse --short HEAD)
-          echo "tag=v${VERSION}-${SHA_SHORT}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
 
+      # ── 6. GitHub Release ────────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dir_browser_unsigned.ipa
-          tag_name: ${{ steps.vars.outputs.tag }}
-          name: Release ${{ steps.vars.outputs.version }} (Build ${{ github.run_number }})
-          body: |
-            ### Unsigned iOS Build
-            - Version: `${{ steps.vars.outputs.version }}`
-            - Developer: **RAKIB**
-            - Sideloading: Compatible with **AltStore**, **Sideloadly**, and **TrollStore**.
-            - Commit: `${{ github.sha }}`
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.name }}
           draft: false
           prerelease: false
+          body: |
+            ## DirXplore Lite — Unsigned IPA
+
+            **Version:** `${{ steps.ver.outputs.tag }}`
+            **Developer:** **RAKIB**
+            **Commit:** `${{ github.sha }}`
+            **Branch:** `${{ github.ref_name }}`
+
+            ### Features:
+            - **HTTP Directory Browser**: Navigate servers like `http://172.16.50.4/`.
+            - **SOCKS5 Proxy**: Audited handshake with full connection logs.
+            - **Ping Testing**: Measure latency of your proxy servers.
+            - **Theme Support**: Dark and Light mode.
+
+            ### How to sideload
+            1. Download `${{ steps.pkg.outputs.ipa_name }}` below.
+            2. Open **AltStore** on your iPhone.
+            3. Tap **+** → choose the `.ipa` file.
+            4. The app will install and refresh every 7 days.
+
+            > ⚠️ This is an **unsigned** build. It requires AltStore (or Sideloadly) to install.
+          files: ${{ steps.pkg.outputs.ipa_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
