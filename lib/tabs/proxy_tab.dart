@@ -137,6 +137,20 @@ class _ProxyTabState extends State<ProxyTab> {
     );
   }
 
+  Map<String, int?> _pings = {};
+
+  Future<void> _pingAll() async {
+    final provider = context.read<AppProxyProvider>();
+    for (var p in provider.proxies) {
+      final ping = await provider.pingProxy(p);
+      if (mounted) {
+        setState(() {
+          _pings[p.name] = ping;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProxyProvider>();
@@ -146,6 +160,11 @@ class _ProxyTabState extends State<ProxyTab> {
       appBar: AppBar(
         title: const Text('Proxy Settings'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bolt),
+            onPressed: _pingAll,
+            tooltip: 'Ping All',
+          ),
           IconButton(
             icon: const Icon(Icons.file_download),
             onPressed: _showYamlDialog,
@@ -161,13 +180,20 @@ class _ProxyTabState extends State<ProxyTab> {
               itemCount: provider.proxies.length,
               itemBuilder: (context, index) {
                 final p = provider.proxies[index];
+                final ping = _pings[p.name];
                 return ListTile(
                   title: Text(p.name),
                   subtitle: Text('${p.server}:${p.port}'),
                   selected: provider.selectedIndex == index,
-                  trailing: provider.selectedIndex == index 
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (ping != null)
+                        Text('${ping}ms', style: TextStyle(color: ping < 200 ? Colors.green : Colors.orange)),
+                      if (provider.selectedIndex == index)
+                        const Icon(Icons.check_circle, color: Colors.green),
+                    ],
+                  ),
                   onTap: () {
                     provider.selectProxy(index);
                     setState(() {

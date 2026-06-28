@@ -27,7 +27,20 @@ jobs:
         run: flutter pub get
 
       - name: Build Frameworks (to satisfy Xcode)
-        run: flutter build ios --release --no-codesign
+        run: |
+          # Inject dummy team into the project file
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = "0000000000";/g' ios/Runner.xcodeproj/project.pbxproj || true
+          
+          # Force disable code signing for all targets via environment variables
+          export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
+          export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
+          export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
+          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY=""
+          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY_NAME=""
+          export FLUTTER_XCODE_EXPANDED_PROVISIONING_PROFILE=""
+          
+          # Build without codesign
+          flutter build ios --release --no-codesign
 
       - name: Package Unsigned IPA
         run: |
@@ -47,7 +60,6 @@ jobs:
         id: vars
         run: |
           VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')
-          # Generate a short hash for the tag to ensure uniqueness on every push
           SHA_SHORT=$(git rev-parse --short HEAD)
           echo "tag=v${VERSION}-${SHA_SHORT}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT

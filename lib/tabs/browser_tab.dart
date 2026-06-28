@@ -4,6 +4,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:path_provider/path_provider.dart';
 import '../providers/app_proxy_provider.dart';
 import '../providers/download_provider.dart';
+import '../providers/settings_provider.dart';
 
 class BrowserTab extends StatefulWidget {
   const BrowserTab({super.key});
@@ -13,14 +14,15 @@ class BrowserTab extends StatefulWidget {
 }
 
 class _BrowserTabState extends State<BrowserTab> {
-  String _currentUrl = 'http://172.16.50.4/';
   List<Map<String, dynamic>> _items = [];
   bool _isLoading = false;
   String? _error;
+  late String _currentUrl;
 
   @override
   void initState() {
     super.initState();
+    _currentUrl = context.read<SettingsProvider>().currentServer;
     _fetchDirectory();
   }
 
@@ -83,16 +85,97 @@ class _BrowserTabState extends State<BrowserTab> {
     );
   }
 
+  void _showServerList() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Consumer<SettingsProvider>(
+          builder: (context, settings, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('Select HTTP Server', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: settings.httpServers.length,
+                    itemBuilder: (context, index) {
+                      final server = settings.httpServers[index];
+                      return ListTile(
+                        title: Text(server),
+                        selected: settings.selectedServerIndex == index,
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => settings.removeServer(index),
+                        ),
+                        onTap: () {
+                          settings.selectServer(index);
+                          _navigate(server);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Add New Server'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showAddServerDialog();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddServerDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add HTTP Server'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'http://example.com/'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                context.read<SettingsProvider>().addServer(controller.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentUrl),
-        leading: _currentUrl != 'http://172.16.50.4/' 
+        title: Text(_currentUrl, style: const TextStyle(fontSize: 14)),
+        actions: [
+          IconButton(icon: const Icon(Icons.dns), onPressed: _showServerList),
+        ],
+        leading: _currentUrl != settings.currentServer
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                // Simplified back navigation
                 final uri = Uri.parse(_currentUrl);
                 var segments = List<String>.from(uri.pathSegments);
                 if (segments.isNotEmpty && segments.last.isEmpty) segments.removeLast();

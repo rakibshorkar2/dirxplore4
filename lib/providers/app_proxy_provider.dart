@@ -25,11 +25,25 @@ class AppProxyProvider with ChangeNotifier {
   ProxyConfig get currentConfig => _proxies[_selectedIndex];
   List<String> get logs => _logs;
 
-  void addLog(String message) {
+  void addLog(String message, {bool isDebug = false}) {
+    // We will check for the debug flag in the provider or via a global static if needed
+    // For now, let's just log everything but mark it
     final timestamp = DateTime.now().toString().split('.').first.split(' ').last;
-    _logs.insert(0, '[$timestamp] $message');
-    if (_logs.length > 200) _logs.removeLast();
+    _logs.insert(0, '[$timestamp] ${isDebug ? "[DEBUG] " : ""}$message');
+    if (_logs.length > 500) _logs.removeLast();
     notifyListeners();
+  }
+
+  Future<int?> pingProxy(ProxyConfig config) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final socket = await Socket.connect(config.server, config.port, timeout: const Duration(seconds: 5));
+      stopwatch.stop();
+      socket.destroy();
+      return stopwatch.elapsedMilliseconds;
+    } catch (e) {
+      return null;
+    }
   }
 
   void updateCurrentConfig(ProxyConfig newConfig) {

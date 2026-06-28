@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_proxy_provider.dart';
 import 'providers/download_provider.dart';
+import 'providers/settings_provider.dart';
 import 'tabs/browser_tab.dart';
 import 'tabs/proxy_tab.dart';
 import 'tabs/download_tab.dart';
@@ -13,6 +14,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => AppProxyProvider()),
         ChangeNotifierProvider(create: (_) => DownloadProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: const MyApp(),
     ),
@@ -24,11 +26,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
     return MaterialApp(
       title: 'HTTP Directory Browser',
+      themeMode: settings.themeMode,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
+        brightness: Brightness.light,
+      ),
+      darkTheme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        brightness: Brightness.dark,
       ),
       home: const MainScreen(),
     );
