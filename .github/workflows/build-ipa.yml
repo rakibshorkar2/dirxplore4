@@ -26,40 +26,29 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Prepare Unsigned Build Settings
+      - name: Clean Xcode Project
         run: |
-          # 1. Inject Dummy Team into pbxproj more reliably
-          # Find the first occurrence of PRODUCT_BUNDLE_IDENTIFIER and insert DEVELOPMENT_TEAM after it
-          # We use a python script for precise pbxproj manipulation since sed is fragile
-          python3 -c '
-          import sys
-          path = "ios/Runner.xcodeproj/project.pbxproj"
-          with open(path, "r") as f:
-              content = f.read()
-          if "DEVELOPMENT_TEAM" not in content:
-              content = content.replace("PRODUCT_BUNDLE_IDENTIFIER =", "DEVELOPMENT_TEAM = \"0000000000\";\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER =")
-          with open(path, "w") as f:
-              f.write(content)
-          '
+          # Use the python script to strip signing from pbxproj
+          python3 clean_pbxproj.py
           
-          # 2. Update xcconfig for all configurations
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Debug.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Debug.xcconfig
+          # Ensure xcconfig is clean
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_STYLE=Manual" >> ios/Flutter/Release.xcconfig
 
       - name: Build iOS (Unsigned)
         run: |
-          # Use --xcargs-style flags directly in environment
+          # Export variables for the build process
           export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
           export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
           export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
-          export FLUTTER_XCODE_DEVELOPMENT_TEAM="0000000000"
+          export FLUTTER_XCODE_CODE_SIGN_STYLE=Manual
+          export FLUTTER_XCODE_DEVELOPMENT_TEAM=""
+          export FLUTTER_XCODE_PROVISIONING_PROFILE=""
+          export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
           
-          # We use the 'ipa' command but tell it not to sign. 
-          # This is sometimes more reliable for producing a packaged output.
-          # If this fails, we fall back to 'ios' and manual packaging.
-          flutter build ios --release --no-codesign
+          # Perform the build
+          flutter build ios --release --no-codesign --verbose
 
       - name: Package Unsigned IPA
         run: |
@@ -72,11 +61,11 @@ jobs:
             exit 1
           fi
           cp -R "$APP_PATH" Payload/
-          # Ensure it's totally unsigned by removing any partial signatures
+          # Remove any potential signature artifacts
           rm -rf Payload/Runner.app/_CodeSignature
           zip -r dir_browser_unsigned.ipa Payload
           
-      - name: Get Version and Build Number
+      - name: Get Version
         id: vars
         run: |
           VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')

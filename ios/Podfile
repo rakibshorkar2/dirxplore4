@@ -1,0 +1,48 @@
+# Uncomment this line to define a global platform for your project
+platform :ios, '12.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = '1'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Release' => :release,
+  'Profile' => :profile,
+}
+
+def flutter_install_all_ios_pods(main_target_directory)
+  return unless File.exist?(File.join(main_target_directory, 'Generated.xcconfig'))
+  helper_dir = parse_key_value(File.join(main_target_directory, 'Generated.xcconfig'), 'FLUTTER_FRAMEWORK_DIR')
+  require File.expand_path(File.join(helper_dir, 'cocoadart/ios/flutter_podhelper.rb'))
+  flutter_ios_podfile_setup
+end
+
+def parse_key_value(file, key)
+  file_contents = File.read(file)
+  file_contents.line_by_line do |line|
+    next unless line.include? key
+    return line.split('=').last.strip
+  end
+end
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Force disable code signing for all Pods
+      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+      config.build_settings['CODE_SIGN_IDENTITY'] = ''
+      config.build_settings['DEVELOPMENT_TEAM'] = ''
+      config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ''
+      config.build_settings['AD_HOC_CODE_SIGNING_ALLOWED'] = 'YES'
+    end
+  end
+end
