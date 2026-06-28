@@ -3,40 +3,81 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:socks5_proxy/socks_client.dart';
+import 'package:yaml/yaml.dart';
 import '../models/proxy_config.dart';
 
 class ProxyProvider with ChangeNotifier {
-  ProxyConfig _config = ProxyConfig(
-    server: '103.166.253.92',
-    port: 1088,
-    username: 'test',
-    password: 'test',
-  );
+  List<ProxyConfig> _proxies = [
+    ProxyConfig(
+      name: 'Default',
+      server: '103.166.253.92',
+      port: 1088,
+      username: 'test',
+      password: 'test',
+    )
+  ];
+  
+  int _selectedIndex = 0;
 
-  ProxyConfig get config => _config;
+  List<ProxyConfig> get proxies => _proxies;
+  int get selectedIndex => _selectedIndex;
+  ProxyConfig get currentConfig => _proxies[_selectedIndex];
 
-  void updateConfig(ProxyConfig newConfig) {
-    _config = newConfig;
+  void updateCurrentConfig(ProxyConfig newConfig) {
+    _proxies[_selectedIndex] = newConfig;
     notifyListeners();
+  }
+
+  void selectProxy(int index) {
+    if (index >= 0 && index < _proxies.length) {
+      _selectedIndex = index;
+      notifyListeners();
+    }
+  }
+
+  void importFromYaml(String yamlString) {
+    try {
+      final doc = loadYaml(yamlString);
+      if (doc is YamlMap && doc.containsKey('proxies')) {
+        final List<ProxyConfig> newProxies = [];
+        final yamlProxies = doc['proxies'];
+        
+        if (yamlProxies is YamlList) {
+          for (final item in yamlProxies) {
+            if (item is YamlMap) {
+              newProxies.add(ProxyConfig.fromYaml(item));
+            }
+          }
+        }
+        
+        if (newProxies.isNotEmpty) {
+          _proxies = newProxies;
+          _selectedIndex = 0;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing YAML: $e');
+      rethrow;
+    }
   }
 
   Dio getDio() {
     final dio = Dio();
+    final config = currentConfig;
     
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
         
         final proxySettings = ProxySettings(
-          InternetAddress(_config.server),
-          _config.port,
-          username: _config.username,
-          password: _config.password,
+          InternetAddress(config.server),
+          config.port,
+          username: config.username,
+          password: config.password,
         );
 
         SocksTCPClient.assignToHttpClient(client, [proxySettings]);
-        
-        // Disable certificate verification for internal/test servers if needed
         client.badCertificateCallback = (cert, host, port) => true;
         
         return client;

@@ -20,14 +20,17 @@ Update `pubspec.yaml` with necessary packages.
 - `provider`: State management for proxy settings and download tasks.
 - `intl`: For date/size formatting.
 - `url_launcher`: To open downloaded files (if possible).
+- `yaml`: To parse proxy configurations.
+- `open_file_plus`: To open files.
 
 ---
 
 ### Core Components
 
-#### `proxy_manager.dart` [NEW]
-- Manages the global proxy state (host, port, username, password).
-- Provides a method to create a `Dio` instance configured with the current SOCKS5 settings.
+#### `proxy_provider.dart` [UPDATED]
+- Manages the list of proxies and the currently selected one.
+- Parses YAML configuration strings to populate the proxy list.
+- Provides a method to create a `Dio` instance configured with the active SOCKS5 settings.
 
 #### `browser_tab.dart` [NEW]
 - Default URL: `http://172.16.50.4/`
@@ -35,10 +38,10 @@ Update `pubspec.yaml` with necessary packages.
 - Handles navigation (folder tapping).
 - Initiates downloads on file tapping.
 
-#### `proxy_tab.dart` [NEW]
-- Form to edit proxy settings.
-- Default settings provided in the prompt.
-- Status indicator (connected/disconnected test).
+#### `proxy_tab.dart` [UPDATED]
+- Includes a text field/dialog for pasting YAML configurations.
+- Lists imported proxies with a selection mechanism.
+- Retains manual editing for the currently selected proxy.
 
 #### `download_tab.dart` [NEW]
 - List of active and completed downloads.
