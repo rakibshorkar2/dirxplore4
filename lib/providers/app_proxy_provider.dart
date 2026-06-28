@@ -6,7 +6,7 @@ import 'package:socks5_proxy/socks_client.dart';
 import 'package:yaml/yaml.dart';
 import '../models/proxy_config.dart';
 
-class ProxyProvider with ChangeNotifier {
+class AppProxyProvider with ChangeNotifier {
   List<ProxyConfig> _proxies = [
     ProxyConfig(
       name: 'Default',

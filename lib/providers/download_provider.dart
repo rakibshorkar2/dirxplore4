@@ -3,14 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import '../models/download_item.dart';
-import 'proxy_provider.dart';
+import 'app_proxy_provider.dart';
 
 class DownloadProvider with ChangeNotifier {
   final List<DownloadItem> _items = [];
 
   List<DownloadItem> get items => _items;
 
-  Future<void> startDownload(String url, String saveDir, ProxyProvider proxyProvider) async {
+  Future<void> startDownload(String url, String saveDir, AppProxyProvider proxyProvider) async {
     final fileName = p.basename(Uri.parse(url).path);
     final savePath = p.join(saveDir, fileName);
     

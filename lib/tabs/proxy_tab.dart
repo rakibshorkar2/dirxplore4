@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/proxy_provider.dart';
+import '../providers/app_proxy_provider.dart';
 import '../models/proxy_config.dart';
 
 class ProxyTab extends StatefulWidget {
@@ -25,7 +25,7 @@ class _ProxyTabState extends State<ProxyTab> {
   }
 
   void _initControllers() {
-    final config = context.read<ProxyProvider>().currentConfig;
+    final config = context.read<AppProxyProvider>().currentConfig;
     _serverController = TextEditingController(text: config.server);
     _portController = TextEditingController(text: config.port.toString());
     _usernameController = TextEditingController(text: config.username);
@@ -63,7 +63,7 @@ class _ProxyTabState extends State<ProxyTab> {
           ElevatedButton(
             onPressed: () {
               try {
-                context.read<ProxyProvider>().importFromYaml(_yamlController.text);
+                context.read<AppProxyProvider>().importFromYaml(_yamlController.text);
                 Navigator.pop(context);
                 setState(() {
                   _initControllers();
@@ -86,7 +86,7 @@ class _ProxyTabState extends State<ProxyTab> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ProxyProvider>();
+    final provider = context.watch<AppProxyProvider>();
     final config = provider.currentConfig;
 
     return Scaffold(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:path_provider/path_provider.dart';
-import '../providers/proxy_provider.dart';
+import '../providers/app_proxy_provider.dart';
 import '../providers/download_provider.dart';
 
 class BrowserTab extends StatefulWidget {
@@ -31,7 +31,7 @@ class _BrowserTabState extends State<BrowserTab> {
     });
 
     try {
-      final dio = context.read<ProxyProvider>().getDio();
+      final dio = context.read<AppProxyProvider>().getDio();
       final response = await dio.get(_currentUrl);
       final document = html_parser.parse(response.data);
       final links = document.getElementsByTagName('a');
@@ -76,7 +76,7 @@ class _BrowserTabState extends State<BrowserTab> {
     context.read<DownloadProvider>().startDownload(
       url, 
       saveDir, 
-      context.read<ProxyProvider>()
+      context.read<AppProxyProvider>()
     );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Download started')),

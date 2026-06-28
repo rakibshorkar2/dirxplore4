@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'providers/proxy_provider.dart';
+import 'providers/app_proxy_provider.dart';
 import 'providers/download_provider.dart';
 import 'tabs/browser_tab.dart';
 import 'tabs/proxy_tab.dart';
@@ -10,7 +10,7 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ProxyProvider()),
+        ChangeNotifierProvider(create: (_) => AppProxyProvider()),
         ChangeNotifierProvider(create: (_) => DownloadProvider()),
       ],
       child: const MyApp(),

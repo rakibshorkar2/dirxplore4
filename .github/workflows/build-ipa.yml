@@ -26,27 +26,33 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS (Unsigned)
-        run: |
-          # Inject a dummy Development Team ID into the project file
-          # We search for PRODUCT_BUNDLE_IDENTIFIER and append DEVELOPMENT_TEAM after it
-          # This ensures the key exists even if the template omitted it.
-          sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER/a\'$'\n''\				DEVELOPMENT_TEAM = "0000000000";' ios/Runner.xcodeproj/project.pbxproj
-          
-          # Force disable code signing for all targets via environment variables
-          export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
-          export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
-          export FLUTTER_XCODE_CODE_SIGN_IDENTITY=""
-          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY=""
-          export FLUTTER_XCODE_EXPANDED_CODE_SIGN_IDENTITY_NAME=""
-          export FLUTTER_XCODE_EXPANDED_PROVISIONING_PROFILE=""
+      - name: Build Frameworks (to satisfy Xcode)
+        run: flutter build ios --release --no-codesign
 
-          flutter build ios --release --no-codesign
-
-      - name: Package IPA
+      - name: Package Unsigned IPA
         run: |
+          # 1. Create a Payload folder
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
+          
+          # 2. Find the .app bundle. 
+          # Flutter build ios --no-codesign puts it in build/ios/iphoneos/Runner.app
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          
+          if [ -d "$APP_PATH" ]; then
+            echo "Found .app at $APP_PATH"
+          else
+            echo "Error: .app bundle not found at $APP_PATH"
+            exit 1
+          fi
+
+          # 3. Copy .app to Payload
+          cp -R "$APP_PATH" Payload/
+          
+          # 4. Strip any existing code signature (just to be safe/totally unsigned)
+          # Note: Unsigned IPAs for AltStore/Sideloadly are essentially just the zipped .app in a Payload folder
+          rm -rf Payload/Runner.app/_CodeSignature
+          
+          # 5. Zip it into an .ipa
           zip -r dir_browser_unsigned.ipa Payload
           
       - name: Get Version
