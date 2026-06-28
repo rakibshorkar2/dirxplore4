@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:socks5_proxy/socks_client.dart';
 import 'package:yaml/yaml.dart';
 import '../models/proxy_config.dart';
+import '../utils/socks5_client.dart';
 
 class AppProxyProvider with ChangeNotifier {
   List<ProxyConfig> _proxies = [
@@ -28,13 +28,13 @@ class AppProxyProvider with ChangeNotifier {
   void addLog(String message) {
     final timestamp = DateTime.now().toString().split('.').first.split(' ').last;
     _logs.insert(0, '[$timestamp] $message');
-    if (_logs.length > 50) _logs.removeLast();
+    if (_logs.length > 200) _logs.removeLast();
     notifyListeners();
   }
 
   void updateCurrentConfig(ProxyConfig newConfig) {
     _proxies[_selectedIndex] = newConfig;
-    addLog('Manual config update for ${newConfig.name}');
+    addLog('Manual config update: ${newConfig.name}');
     notifyListeners();
   }
 
@@ -64,7 +64,7 @@ class AppProxyProvider with ChangeNotifier {
         if (newProxies.isNotEmpty) {
           _proxies = newProxies;
           _selectedIndex = 0;
-          addLog('Imported ${newProxies.length} proxies from YAML');
+          addLog('Imported ${newProxies.length} proxies.');
           notifyListeners();
         }
       }
@@ -75,16 +75,15 @@ class AppProxyProvider with ChangeNotifier {
   }
 
   Future<bool> testConnection() async {
-    addLog('Testing connection to ${_proxies[_selectedIndex].server}...');
+    addLog('TEST: Connectivity check...');
     try {
       final dio = getDio();
-      // Use HTTP for testing as some proxies/targets might have issues with HTTPS 204
-      final response = await dio.get('http://www.google.com/generate_204').timeout(const Duration(seconds: 10));
+      final response = await dio.get('http://www.google.com/generate_204').timeout(const Duration(seconds: 15));
       final success = response.statusCode == 204 || response.statusCode == 200;
-      addLog('Test Result: ${success ? 'SUCCESS' : 'FAILED (${response.statusCode})'}');
+      addLog('TEST RESULT: ${success ? 'SUCCESS' : 'FAILED (${response.statusCode})'}');
       return success;
     } catch (e) {
-      addLog('Test Failed: $e');
+      addLog('TEST FAILED: $e');
       return false;
     }
   }
@@ -93,46 +92,27 @@ class AppProxyProvider with ChangeNotifier {
     final dio = Dio();
     final config = currentConfig;
     
-    dio.options.connectTimeout = const Duration(seconds: 15);
-    dio.options.receiveTimeout = const Duration(seconds: 15);
+    dio.options.connectTimeout = const Duration(seconds: 20);
+    dio.options.receiveTimeout = const Duration(seconds: 20);
     
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
         
-        // Force IPv4 if possible to avoid IPv6 connection issues seen in Proxifier
-        client.connectionTimeout = const Duration(seconds: 10);
-        
-        try {
-          // Attempt to parse server as IP. If it fails, it's a hostname.
-          final address = InternetAddress.tryParse(config.server) ?? config.server;
+        // Use the connectionFactory to intercept all socket creations
+        client.connectionFactory = (uri, proxyHost, proxyPort) async {
+          addLog('NETWORK: Intercepting request to ${uri.host}:${uri.port}');
           
-          final proxySettings = ProxySettings(
-            address is InternetAddress ? address : InternetAddress.anyIPv4, // Placeholder if hostname
-            config.port,
+          final socksClient = Socks5Client(
+            proxyHost: config.server,
+            proxyPort: config.port,
             username: config.username.isEmpty ? null : config.username,
             password: config.password.isEmpty ? null : config.password,
+            onLog: (msg) => addLog(msg),
           );
 
-          // If it was a hostname, we might need a different approach or let the library handle it
-          // socks5_proxy's ProxySettings actually takes InternetAddress.
-          // If it's a hostname, we should resolve it first.
-          
-          SocksTCPClient.assignToHttpClient(client, [proxySettings]);
-          
-          if (address is String) {
-            // This is a limitation of socks5_proxy package. It needs an InternetAddress.
-            // We'll try to resolve it.
-            addLog('Resolving hostname: $address...');
-            InternetAddress.lookup(address).then((list) {
-              if (list.isNotEmpty) {
-                proxySettings.host = list.first;
-              }
-            });
-          }
-        } catch (e) {
-          addLog('Adapter Error: $e');
-        }
+          return await socksClient.connect(uri.host, uri.port);
+        };
 
         client.badCertificateCallback = (cert, host, port) => true;
         return client;
