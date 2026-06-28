@@ -5,6 +5,7 @@ import 'providers/download_provider.dart';
 import 'tabs/browser_tab.dart';
 import 'tabs/proxy_tab.dart';
 import 'tabs/download_tab.dart';
+import 'tabs/settings_tab.dart';
 
 void main() {
   runApp(
@@ -48,6 +49,7 @@ class _MainScreenState extends State<MainScreen> {
     const BrowserTab(),
     const ProxyTab(),
     const DownloadTab(),
+    const SettingsTab(),
   ];
 
   @override
@@ -60,10 +62,12 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Browser'),
           BottomNavigationBarItem(icon: Icon(Icons.settings_input_component), label: 'Proxy'),
           BottomNavigationBarItem(icon: Icon(Icons.download), label: 'Downloads'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );

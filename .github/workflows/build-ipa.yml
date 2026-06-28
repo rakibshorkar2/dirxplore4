@@ -3,8 +3,6 @@ name: Build and Release Unsigned IPA
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -16,6 +14,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -31,43 +31,37 @@ jobs:
 
       - name: Package Unsigned IPA
         run: |
-          # 1. Create a Payload folder
           mkdir -p Payload
-          
-          # 2. Find the .app bundle. 
-          # Flutter build ios --no-codesign puts it in build/ios/iphoneos/Runner.app
           APP_PATH="build/ios/iphoneos/Runner.app"
-          
           if [ -d "$APP_PATH" ]; then
             echo "Found .app at $APP_PATH"
           else
             echo "Error: .app bundle not found at $APP_PATH"
             exit 1
           fi
-
-          # 3. Copy .app to Payload
           cp -R "$APP_PATH" Payload/
-          
-          # 4. Strip any existing code signature (just to be safe/totally unsigned)
-          # Note: Unsigned IPAs for AltStore/Sideloadly are essentially just the zipped .app in a Payload folder
           rm -rf Payload/Runner.app/_CodeSignature
-          
-          # 5. Zip it into an .ipa
           zip -r dir_browser_unsigned.ipa Payload
           
-      - name: Get Version
-        id: get_version
+      - name: Get Version and Build Number
+        id: vars
         run: |
           VERSION=$(grep 'version: ' pubspec.yaml | sed 's/version: //')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          # Generate a short hash for the tag to ensure uniqueness on every push
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "tag=v${VERSION}-${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           files: dir_browser_unsigned.ipa
-          tag_name: v${{ steps.get_version.outputs.VERSION }}
-          name: Release v${{ steps.get_version.outputs.VERSION }}
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: Release ${{ steps.vars.outputs.version }} (${{ github.run_number }})
+          body: |
+            Automated build for version ${{ steps.vars.outputs.version }}
+            Commit: ${{ github.sha }}
+            Run Number: ${{ github.run_number }}
           draft: false
           prerelease: false
         env:
